@@ -66,7 +66,23 @@ impl Quma {
         qseq: String,
         gfilep_f: String,
     ) -> Quma {
-        return ();
+        gfilep_f = Quma::fasta_make(gseq, String::from("genomeF"));
+        data: Vec<Reference> = Quma::process_fasta_output(
+            qseq,
+            String::from("queryF"),
+            String::from("queryR"),
+            gfilep_f,
+        );
+        values = Quma::format_output(gseq, data);
+        return Quma(
+            gfile_contents = gfile_contents,
+            qfile_contents = qfile_contents,
+            gseq = gseq,
+            qseq = qseq,
+            gfilep_f = gfilep_f,
+            data = data,
+            values = values,
+        );
     }
 
     fn parse_genome(&self) -> String {
@@ -90,7 +106,7 @@ impl Quma {
         return ();
     }
 
-    fn fasta_make(seq: String, seq_name: String, line: i32) -> String {
+    fn fasta_make(seq: String, seq_name: String) -> String {
         return ();
     }
 
@@ -137,15 +153,15 @@ impl Quma {
     }
 }
 
-/// Formats the sum of two numbers as string.
+/// Run quma and return the quma object
 #[pyfunction]
 fn quma(seq: String) -> PyResult<String> {
-    Ok(Quma::parse_genome(seq))
+    Ok(Quma::new())
 }
 
 /// A Python module implemented in Rust.
 #[pymodule]
 fn rust_quma(_py: Python, m: &PyModule) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(sum_as_string, m)?)?;
+    m.add_function(wrap_pyfunction!(quma, m)?)?;
     Ok(())
 }
