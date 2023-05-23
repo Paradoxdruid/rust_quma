@@ -9,4 +9,5 @@ name = "rust_quma"
 crate-type = ["cdylib"]
 
 [dependencies]
+bio = "1.1.0"
 pyo3 = "0.18.3"
