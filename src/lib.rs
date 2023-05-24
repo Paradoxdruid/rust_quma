@@ -82,26 +82,30 @@ struct Quma {
 /// # Returns
 ///
 /// * `Quma` - Quma struct
-fn py_new(gfile_contents: String, qfile_contents: String) -> Quma {
-    let gseq = parse_genome(gfile_contents);
-    let qseq = parse_biseq(qfile_contents);
-    let gfilep_f = fasta_make(gseq, String::from("genomeF"));
-    let data: Vec<Reference> = process_fasta_output(
-        qseq,
-        String::from("queryF"),
-        String::from("queryR"),
-        gfilep_f,
-    );
-    let values = format_output(gseq, data);
-    return Quma {
-        gfile_contents: gfile_contents,
-        qfile_contents: qfile_contents,
-        gseq: gseq,
-        qseq: qseq,
-        gfilep_f: gfilep_f,
-        data: data,
-        values: values,
-    };
+#[pymethods]
+impl Quma {
+    #[new]
+    fn py_new(gfile_contents: String, qfile_contents: String) -> Self {
+        let gseq = parse_genome(gfile_contents);
+        let qseq = parse_biseq(qfile_contents);
+        let gfilep_f = fasta_make(gseq, String::from("genomeF"));
+        let data: Vec<Reference> = process_fasta_output(
+            qseq,
+            String::from("queryF"),
+            String::from("queryR"),
+            gfilep_f,
+        );
+        let values = format_output(gseq, data);
+        return Quma {
+            gfile_contents: gfile_contents,
+            qfile_contents: qfile_contents,
+            gseq: gseq,
+            qseq: qseq,
+            gfilep_f: gfilep_f,
+            data: data,
+            values: values,
+        };
+    }
 }
 
 /// Parse genome file, removing white spaces and extra returns.
