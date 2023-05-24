@@ -1,8 +1,8 @@
-use bio::alignment::pairwise::*;
+// use bio::alignment::pairwise::*;
 use bio::alignment::Alignment;
-use bio::alignment::AlignmentOperation::*;
-use bio::alphabets;
-use bio::scores::blosum62;
+// use bio::alignment::AlignmentOperation::*;
+// use bio::alphabets;
+// use bio::scores::blosum62;
 use lazy_static::lazy_static;
 use pyo3::prelude::*;
 use regex::Regex;
@@ -489,16 +489,26 @@ fn find_best_dataset(ffres: QumaResult, frres: QumaResult) -> (QumaResult, i32) 
     if ffres.ali_len > frres.ali_len {
         let fres = ffres;
         let fdir = 1;
+        return (fres, fdir);
     } else {
         let fres = frres;
         let fdir = -1;
+        return (fres, fdir);
     }
-
-    return (fres, fdir);
 }
 
+/// Process program output into quma-formatted string
+///
+/// # Arguments
+///
+/// * `gseq` - genomic sequence
+/// * `data` - vector of Reference structs
+///
+/// # Returns
+///
+/// * `String` - tabular quma-formatted string
 fn format_output(gseq: String, data: Vec<Reference>) -> String {
-    return ();
+    return String::from("TODO");
 }
 
 /// Run quma and return the quma object
