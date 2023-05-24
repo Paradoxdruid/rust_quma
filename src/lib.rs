@@ -6,6 +6,9 @@ use bio::scores::blosum62;
 use lazy_static::lazy_static;
 use pyo3::prelude::*;
 use regex::Regex;
+use std::collections::HashMap;
+
+type EnvMap = HashMap<String, String>;
 
 // Tools to quantify methylation in reduced representation bisulfite sequencing reads.
 
@@ -316,32 +319,182 @@ fn process_fasta_output(
     return data;
 }
 
+/// Return reverse complement of sequence
+///
+/// # Arguments
+///
+/// * `seq` - sequence string
+///
+/// # Returns
+///
+/// * `string` - reverse complement of sequence
 fn rev_comp(seq: String) -> String {
-    return ();
+    let reversed = seq.chars().rev().collect::<String>();
+
+    fn expand_env(value: &str, env_user: &EnvMap) -> String {
+        let mut expanded = value.to_string();
+        for (env_key, env_value) in env_user {
+            expanded = expanded.replace(env_key, env_value);
+        }
+        expanded.to_string()
+    }
+
+    // reverse comp mapping
+    let mut mappings = HashMap::from([
+        ("A".to_string(), "T".to_string()),
+        ("C".to_string(), "G".to_string()),
+        ("G".to_string(), "C".to_string()),
+        ("T".to_string(), "A".to_string()),
+        ("U".to_string(), "A".to_string()),
+        ("R".to_string(), "Y".to_string()),
+        ("Y".to_string(), "R".to_string()),
+        ("M".to_string(), "K".to_string()),
+        ("W".to_string(), "W".to_string()),
+        ("S".to_string(), "S".to_string()),
+        ("K".to_string(), "M".to_string()),
+        ("D".to_string(), "H".to_string()),
+        ("H".to_string(), "D".to_string()),
+        ("B".to_string(), "V".to_string()),
+        ("V".to_string(), "B".to_string()),
+        ("N".to_string(), "N".to_string()),
+        ("a".to_string(), "t".to_string()),
+        ("c".to_string(), "g".to_string()),
+        ("g".to_string(), "c".to_string()),
+        ("t".to_string(), "a".to_string()),
+        ("u".to_string(), "a".to_string()),
+        ("r".to_string(), "y".to_string()),
+        ("y".to_string(), "r".to_string()),
+        ("m".to_string(), "k".to_string()),
+        ("w".to_string(), "w".to_string()),
+        ("s".to_string(), "s".to_string()),
+        ("k".to_string(), "m".to_string()),
+        ("d".to_string(), "h".to_string()),
+        ("h".to_string(), "d".to_string()),
+        ("b".to_string(), "v".to_string()),
+        ("v".to_string(), "b".to_string()),
+        ("n".to_string(), "n".to_string()),
+    ]);
+
+    mappings.insert("$A".to_string(), "Alpha".to_string());
+
+    let value = expand_env(&reversed, &mappings);
+
+    return value;
 }
 
+/// Find pairwise alignment substrings
+///
+/// # Arguments
+///
+/// * `alignment` - alignment object
+///
+/// # Returns
+///
+/// * `tuple` - tuple of String, String query and genomic aligned substrings
 fn matching_substrings(alignment: Alignment) -> (String, String) {
     return ();
 }
 
+/// Run pairwise sequence alignment
+///
+/// # Arguments
+///
+/// * `gfile` - genomic sequence file contents
+/// * `qfile` - sequencing read(s) file contents
+///
+/// # Returns
+///
+/// * `QumaResult` - alignment result struct
 fn align_seq_and_generate_stats(gfile: String, qfile: String) -> QumaResult {
-    return ();
+    let this_result = QumaResult {
+        q_ali: "".to_string(),
+        g_ali: "".to_string(),
+        val: "".to_string(),
+        perc: 0.0,
+        pconv: 0.0,
+        gap: 0,
+        menum: 0,
+        unconv: 0,
+        conv: 0,
+        quma_match: 0,
+        ali_mis: 0,
+        ali_len: 0,
+    };
+
+    // TODO: alignment
+
+    return this_result;
 }
 
 fn process_alignment_matches(result: QumaResult) -> QumaResult {
     return ();
 }
 
+/// Helper to generate summary statistics in QumaResult struct
+///
+/// # Arguments
+///
+/// * `result` - QumaResult struct
+///
+/// # Returns
+///
+/// * `QumaResult` - QumaResult struct with summary statistics
 fn generate_summary_stats(result: QumaResult) -> QumaResult {
-    return ();
+    if result.conv + result.unconv != 0 {
+        result.pconv = percentage(result.conv, result.unconv, "sum".to_string())
+    } else {
+        result.pconv = 0.0;
+    }
+
+    result.perc = percentage(result.quma_match, result.ali_len, "total".to_string());
+    result.ali_mis = result.ali_len - result.quma_match;
+    return result;
 }
 
+/// Helper to return percentages
+///
+/// # Arguments
+///
+/// * `a` - numerator
+/// * `b` - denominator
+/// * `calc_type` - type of calculation to perform (`sum` or `total`)
+///
+/// # Returns
+///
+/// * `f32` - percentage
 fn percentage(a: i32, b: i32, calc_type: String) -> f32 {
-    return ();
+    if calc_type == "sum".to_string() {
+        return 100.0 * a as f32 / (a as f32 + b as f32);
+    } else if calc_type == "total".to_string() {
+        return 100.0 * a as f32 / b as f32;
+    } else {
+        return 0.0;
+    }
+    // TODO: Implement error behavior
 }
 
+/// Helper to find best data returned
+///
+/// # Arguments
+///
+/// * `ffres` - quma result from forward alignment
+/// * `frres` - quma result from reverse alignment
+///
+/// # Returns
+///
+/// * `(QumaResult, i32)` - tuple of best QumaResult and direction
 fn find_best_dataset(ffres: QumaResult, frres: QumaResult) -> (QumaResult, i32) {
-    return ();
+    // FIXME: Find best dataset better
+
+    if ffres.ali_len > frres.ali_len {
+        let fres = ffres;
+        let fdir = 1;
+    } else {
+        let fres = frres;
+        let fdir = -1;
+    }
+
+    return (fres, fdir);
 }
 
 fn format_output(gseq: String, data: Vec<Reference>) -> String {
