@@ -1,4 +1,5 @@
 use bio::alignment::pairwise::*;
+use bio::alignment::Alignment;
 use bio::alignment::AlignmentOperation::*;
 use bio::alphabets;
 use bio::scores::blosum62;
@@ -14,6 +15,10 @@ use regex::Regex;
 // refactoring and Rust conversion by Paradoxdruid
 
 // See https://docs.rs/bio/latest/bio/alignment/pairwise/index.html
+
+lazy_static! {
+    static ref ALPHABET: String = "ACGTURYMWSKDHBVNacgturymwskdhbvn".to_string();
+}
 
 // struct of quma aligment comparison results
 #[pyclass]
@@ -66,6 +71,16 @@ struct Quma {
 
 #[pymethods]
 impl Quma {
+    /// Create new Quma struct
+    ///
+    /// # Arguments
+    ///
+    /// * `gfile_contents` - genome fasta file contents
+    /// * `qfile_contents` - query fasta file contents
+    ///
+    /// # Returns
+    ///
+    /// * `Quma` - Quma struct
     #[new]
     fn py_new(gfile_contents: String, qfile_contents: String) -> PyResult<Self> {
         let gseq = Quma::parse_genome(gfile_contents);
@@ -78,15 +93,15 @@ impl Quma {
             gfilep_f,
         );
         let values = Quma::format_output(gseq, data);
-        return Ok(Quma(
-            gfile_contents = gfile_contents,
-            qfile_contents = qfile_contents,
-            gseq = gseq,
-            qseq = qseq,
-            gfilep_f = gfilep_f,
-            data = data,
-            values = values,
-        ));
+        return Ok(Quma {
+            gfile_contents: gfile_contents,
+            qfile_contents: qfile_contents,
+            gseq: gseq,
+            qseq: qseq,
+            gfilep_f: gfilep_f,
+            data: data,
+            values: values,
+        });
     }
 
     /// Parse genome file, removing white spaces and extra returns.
@@ -98,16 +113,15 @@ impl Quma {
     /// # Returns
     ///
     /// * `string` - parsed and curated string of genome sequence
-    fn parse_genome(&self) -> String {
-        let seq = self.gfile_contents.clone();
+    fn parse_genome(gfile_contents: String) -> String {
         let re_one = Regex::new(r"^[\r\s]+").unwrap();
-        let out_one = re_one.replace_all(seq, "");
+        let out_one = re_one.replace_all(&gfile_contents, "");
         let re_two = Regex::new(r"[\r\s]+$").unwrap();
-        let out_two = re_two.replace_all(out_one, "");
+        let out_two = re_two.replace_all(&out_one, "");
         let re_three = Regex::new(r"(\r|\n|\r\n){2}").unwrap();
-        let out_three = re_three.replace_all(out_two, r"\r|\n|\r\n");
+        let out_three = re_three.replace_all(&out_two, r"\r|\n|\r\n");
 
-        let out_seq = self.parse_seq(out_three);
+        let out_seq = Quma::parse_seq(out_three.to_string());
         return out_seq;
     }
 
@@ -123,43 +137,87 @@ impl Quma {
     fn scrub_whitespace(string: String) -> String {
         let trim_one = string.trim();
         let re_one = Regex::new(r"\r\n\r\n").unwrap();
-        let trim_two = re_one.replace_all(trim_one, r"\r\n");
+        let trim_two = re_one.replace_all(&trim_one, r"\r\n");
         let re_two = Regex::new(r"\n\n").unwrap();
-        let trim_three = re_two.replace_all(trim_two, r"\n");
+        let trim_three = re_two.replace_all(&trim_two, r"\n");
         let re_three = Regex::new(r"\r\r").unwrap();
-        let trim_four = re_three.replace_all(trim_three, r"\r");
+        let trim_four = re_three.replace_all(&trim_three, r"\r");
         let re_four = Regex::new(r"\r\n").unwrap();
-        let trim_five = re_four.replace_all(trim_four, r"\n");
+        let trim_five = re_four.replace_all(&trim_four, r"\n");
         let re_five = Regex::new(r"\r").unwrap();
-        let trim_six = re_five.replace_all(trim_five, r"\n");
-        return trim_six;
+        let trim_six = re_five.replace_all(&trim_five, r"\n");
+        return trim_six.to_string();
     }
 
-    fn parse_biseq(&self) -> Vec<Fasta> {
-        let multi = self.qfile_contents.clone();
-        let multi_clean = self.scrub_whitespace(multi);
+    /// Parse bisulfite sequencing fasta file
+    ///
+    /// # Returns
+    ///
+    /// * `vector` - vector of Fasta structs of sequence reads
+    fn parse_biseq(qfile_contents: String) -> Vec<Fasta> {
+        let multi_clean = Quma::scrub_whitespace(qfile_contents);
         let mut multi_split = multi_clean.lines();
 
+        let biseq = Vec::<Fasta>::new();
         for line in multi_split {
+            let mut fa = Fasta {
+                com: String::from(""),
+                pos: String::from(""),
+                seq: String::from(""),
+            };
             if line.contains(">") {
-                let mut fa = Fasta {
-                    com: String::from(""),
-                    pos: String::from(""),
-                    seq: String::from(""),
-                };
-                let fa: com = line;
+                let re_one = Regex::new(r"^>").unwrap();
+                let trim_one = re_one.replace_all(&line, "");
+                let re_two = Regex::new(r"\s*$").unwrap();
+                let trim_two = re_two.replace_all(&trim_one, "");
+                fa.com = trim_two.to_string();
+                biseq.push(fa);
             } else {
+                let allowed = Quma::check_char_in_allowed(line.to_string(), ALPHABET.to_string());
+                if allowed == "" {
+                    continue;
+                }
+                let seq = allowed.to_uppercase();
+                fa.seq = seq;
             }
         }
+        return biseq;
+    }
+
+    /// Extract sequence strings from the string of a text file
+    ///
+    /// # Arguments
+    ///
+    /// * `seq` - string of text file
+    ///
+    /// # Returns
+    ///
+    /// * `string` - sequence string
+    fn parse_seq(seq: String) -> String {
         return ();
     }
 
-    fn parse_seq(&self, seq: String) -> String {
-        return ();
-    }
-
+    /// Return only charcters in string present in pattern
+    ///
+    /// # Arguments
+    ///
+    /// * `seq` - sequence string
+    /// * `pattern` - string of allowed characters
+    ///
+    /// # Returns
+    ///
+    /// * `string` - sequence string with only allowed characters
     fn check_char_in_allowed(seq: String, pattern: String) -> String {
-        return ();
+        let mut seq_out = seq.clone();
+        let pattern_chars = pattern.chars();
+        for each in seq_out.chars() {
+            if pattern_chars.contains(&each) {
+                continue;
+            } else {
+                seq_out = seq_out.replace(&each, "");
+            }
+        }
+        return seq_out;
     }
 
     fn fasta_make(seq: String, seq_name: String) -> String {
@@ -167,7 +225,6 @@ impl Quma {
     }
 
     fn process_fasta_output(
-        &self,
         qseq: Vec<Fasta>,
         qfile_f: String,
         qfile_r: String,
@@ -180,7 +237,7 @@ impl Quma {
         return ();
     }
 
-    fn matching_substrings(alignment: Bio::Alignment::Pairwise::Alignment) -> (String, String) {
+    fn matching_substrings(alignment: Alignment) -> (String, String) {
         return ();
     }
 

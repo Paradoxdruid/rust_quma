@@ -691,7 +691,9 @@ name = "rust_quma"
 version = "0.1.0"
 dependencies = [
  "bio",
+ "lazy_static",
  "pyo3",
+ "regex",
 ]
 
 [[package]]
