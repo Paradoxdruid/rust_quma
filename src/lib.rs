@@ -1,8 +1,8 @@
-// use bio::alignment::pairwise::*;
+use bio::alignment::pairwise::*;
 use bio::alignment::Alignment;
-// use bio::alignment::AlignmentOperation::*;
+use bio::alignment::AlignmentOperation::*;
 // use bio::alphabets;
-// use bio::scores::blosum62;
+use bio::scores::blosum62;
 use lazy_static::lazy_static;
 use pyo3::prelude::*;
 use regex::Regex;
@@ -225,18 +225,16 @@ fn parse_seq(seq: String) -> String {
 /// # Returns
 ///
 /// * `string` - sequence string with only allowed characters
-fn check_char_in_allowed(seq: String, pattern: String) -> String {
-    // let mut seq_out = seq.clone();
-    // let pattern_chars = pattern.chars();
-    // for each in seq_out.chars() {
-    //     if pattern_chars.contains(&each) {
-    //         continue;
-    //     } else {
-    //         seq_out = seq_out.replace(&each, "");
-    //     }
-    // }
-    // return seq_out;
-    return ();
+fn check_char_in_allowed(mut seq: String, pattern: String) -> String {
+    let pattern_chars = pattern;
+    seq.retain(|p| {
+        if !pattern_chars.contains(*&p) {
+            false
+        } else {
+            true
+        }
+    });
+    return seq;
 }
 
 /// Write a sequence string to a fasta-formatted text file contents
@@ -425,7 +423,15 @@ fn align_seq_and_generate_stats(gfile: String, qfile: String) -> QumaResult {
         ali_len: 0,
     };
 
-    // TODO: alignment
+    let bio_gseq = gfile.lines().next().unwrap().as_bytes();
+    let bio_qseq = qfile.lines().next().unwrap().as_bytes();
+
+    let mut aligner = Aligner::new(-10, -1, &blosum62);
+    let bio_alignments = aligner.local(bio_gseq, bio_qseq);
+
+    let (query_ali, genome_ali) = matching_substrings(bio_alignments);
+
+    let fh_ = format!(">genome\n{}\n>que\n{}\n", genome_ali, query_ali);
 
     return this_result;
 }
