@@ -692,6 +692,7 @@ version = "0.1.0"
 dependencies = [
  "bio",
  "lazy_static",
+ "ndarray",
  "pyo3",
  "regex",
 ]

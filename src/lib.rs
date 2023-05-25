@@ -1,12 +1,12 @@
 use bio::alignment::pairwise::*;
 use bio::alignment::Alignment;
-use bio::alignment::AlignmentOperation::*;
-// use bio::alphabets;
-use bio::scores::blosum62;
+// use bio::alignment::AlignmentOperation::*;
 use lazy_static::lazy_static;
 use pyo3::prelude::*;
 use regex::Regex;
+use std::cmp;
 use std::collections::HashMap;
+extern crate ndarray;
 
 type EnvMap = HashMap<String, String>;
 
@@ -23,8 +23,48 @@ lazy_static! {
     static ref ALPHABET: String = "ACGTURYMWSKDHBVNacgturymwskdhbvn".to_string();
 }
 
+lazy_static! {
+    // matrix alphabet:  ATGCSWRYKMBVHDNU
+    // see https://docs.rs/bio/latest/src/bio/scores/blosum62.rs.html#89-94
+    static ref MATRIX: ndarray::Array2<i32> = ndarray::Array::from_shape_vec(
+        (16, 16),
+        vec![
+            5, -4, -4, -4, -4, 1, 1, -4, -4, 1, -4, -1, -1, -1, -2, -4, -4, 5, -4, 5, -4, 1, -4, 1,
+            1, -4, -1, -4, -1, -1, -2, 5, -4, -4, 5, -4, 1, -4, 1, -4, 1, -4, -1, -1, -4, -1, -2,
+            -4, -4, -4, -4, 5, 1, -4, -4, 1, -4, 1, -1, -1, -1, -4, -2, -4, -4, -4, 1, 1, -1, -4,
+            -2, -2, -2, -2, -1, -1, -3, -3, -1, -4, 1, 1, -4, -4, -4, -1, -2, -2, -2, -2, -3, -3,
+            -1, -1, -1, 1, 1, -4, 1, -4, -2, -2, -1, -4, -2, -2, -3, -1, -3, -1, -1, -4, -4, 1, -4,
+            1, -2, -2, -4, -1, -2, -2, -1, -3, -1, -3, -1, 1, -4, 1, 1, -4, -2, -2, -2, -2, -1, -4,
+            -1, -3, -3, -1, -1, 1, 1, -4, -4, 1, -2, -2, -2, -2, -4, -1, -3, -1, -1, -3, -1, -4,
+            -4, -1, -1, -1, -1, -3, -3, -1, -1, -3, -1, -2, -2, -2, -1, -1, -1, -4, -1, -1, -1, -3,
+            -1, -3, -3, -1, -2, -1, -2, -2, -1, -4, -1, -1, -4, -1, -3, -1, -3, -1, -3, -1, -2, -2,
+            -1, -2, -1, -1, -1, -1, -1, -4, -3, -1, -1, -3, -1, -3, -2, -2, -2, -1, -1, -1, -2, -2,
+            -2, -2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -2, -4, 5, -4, -4, -4, 1, -4, 1, 1,
+            -4, -1, -4, -1, -1, -2, 5
+        ]
+    )
+    .unwrap();
+}
+
+#[inline]
+fn lookup(a: u8) -> usize {
+    // FIXME: These values are wrong, need to account for 16,16 instead of 27,27
+    if a == b'Y' {
+        23
+    } else if a == b'Z' {
+        24
+    } else if a == b'X' {
+        25
+    } else if a == b'*' {
+        26
+    } else {
+        (a - 65) as usize
+    }
+}
+
 // struct of quma aligment comparison results
 #[pyclass]
+#[derive(Clone)]
 struct QumaResult {
     q_ali: String,
     g_ali: String,
@@ -42,6 +82,7 @@ struct QumaResult {
 
 // struct to to wrap fasta results
 #[pyclass]
+#[derive(Clone)]
 struct Fasta {
     com: String,
     pos: String,
@@ -52,6 +93,7 @@ struct Fasta {
 // includes fasta sequence, quma results, directon of read, genomic direction,
 // and whether result meets exclusion criteria.
 #[pyclass]
+#[derive(Clone)]
 struct Reference {
     fasta: Fasta,
     res: QumaResult,
@@ -86,16 +128,16 @@ struct Quma {
 impl Quma {
     #[new]
     fn py_new(gfile_contents: String, qfile_contents: String) -> Self {
-        let gseq = parse_genome(gfile_contents);
-        let qseq = parse_biseq(qfile_contents);
-        let gfilep_f = fasta_make(gseq, String::from("genomeF"));
+        let gseq = parse_genome(gfile_contents.clone());
+        let qseq = parse_biseq(qfile_contents.clone());
+        let gfilep_f = fasta_make(gseq.clone(), String::from("genomeF"));
         let data: Vec<Reference> = process_fasta_output(
-            qseq,
+            qseq.clone(),
             String::from("queryF"),
             String::from("queryR"),
-            gfilep_f,
+            gfilep_f.clone(),
         );
-        let values = format_output(gseq, data);
+        let values = format_output(gseq.clone(), data.clone());
         return Quma {
             gfile_contents: gfile_contents,
             qfile_contents: qfile_contents,
@@ -160,9 +202,9 @@ fn scrub_whitespace(string: String) -> String {
 /// * `vector` - vector of Fasta structs of sequence reads
 fn parse_biseq(qfile_contents: String) -> Vec<Fasta> {
     let multi_clean = scrub_whitespace(qfile_contents);
-    let mut multi_split = multi_clean.lines();
+    let multi_split = multi_clean.lines();
 
-    let biseq = Vec::<Fasta>::new();
+    let mut biseq = Vec::<Fasta>::new();
     for line in multi_split {
         let mut fa = Fasta {
             com: String::from(""),
@@ -283,7 +325,7 @@ fn process_fasta_output(
 
     let mut data = Vec::<Reference>::new();
     let mut pos = 0;
-    for fa in qseq {
+    for mut fa in qseq {
         pos += 1;
         fa.pos = pos.to_string();
 
@@ -297,9 +339,9 @@ fn process_fasta_output(
 
         let genome_direction = 1;
 
-        let this_ref = Reference {
+        let mut this_ref = Reference {
             fasta: fa,
-            res: this_result,
+            res: this_result.clone(),
             dir: final_direction,
             gdir: genome_direction,
             exc: 0,
@@ -393,8 +435,20 @@ fn rev_comp(seq: String) -> String {
 /// # Returns
 ///
 /// * `tuple` - tuple of String, String query and genomic aligned substrings
-fn matching_substrings(alignment: Alignment) -> (String, String) {
-    return ();
+fn matching_substrings(alignment: Alignment, bio_gseq: &[u8], bio_qseq: &[u8]) -> (String, String) {
+    let g_substring =
+        String::from_utf8(bio_gseq[alignment.xstart..alignment.xend].to_vec()).unwrap();
+    let q_substring =
+        String::from_utf8(bio_qseq[alignment.ystart..alignment.yend].to_vec()).unwrap();
+
+    return (g_substring, q_substring);
+}
+
+fn quma_score(a: u8, b: u8) -> i32 {
+    let a = lookup(a);
+    let b = lookup(b);
+
+    MATRIX[(a, b)]
 }
 
 /// Run pairwise sequence alignment
@@ -408,7 +462,7 @@ fn matching_substrings(alignment: Alignment) -> (String, String) {
 ///
 /// * `QumaResult` - alignment result struct
 fn align_seq_and_generate_stats(gfile: String, qfile: String) -> QumaResult {
-    let this_result = QumaResult {
+    let mut this_result = QumaResult {
         q_ali: "".to_string(),
         g_ali: "".to_string(),
         val: "".to_string(),
@@ -426,18 +480,118 @@ fn align_seq_and_generate_stats(gfile: String, qfile: String) -> QumaResult {
     let bio_gseq = gfile.lines().next().unwrap().as_bytes();
     let bio_qseq = qfile.lines().next().unwrap().as_bytes();
 
-    let mut aligner = Aligner::new(-10, -1, &blosum62);
+    let mut aligner = Aligner::new(-10, -1, &quma_score);
+    // TODO: Custom matrix for CpG
+    // See https://docs.rs/bio/latest/src/bio/scores/blosum62.rs.html#89-94
+
     let bio_alignments = aligner.local(bio_gseq, bio_qseq);
 
-    let (query_ali, genome_ali) = matching_substrings(bio_alignments);
+    let (query_ali, genome_ali) = matching_substrings(bio_alignments, bio_gseq, bio_qseq);
 
     let fh_ = format!(">genome\n{}\n>que\n{}\n", genome_ali, query_ali);
 
-    return this_result;
+    let mut fh = fh_.lines();
+
+    for (i, el) in fh.clone().enumerate() {
+        if el.contains(">que") {
+            this_result.q_ali = fh.nth(i + 1).unwrap().to_string();
+        } else if el.contains(">genome") {
+            this_result.g_ali = fh.nth(i + 1).unwrap().to_string();
+        }
+    }
+
+    let re_one = Regex::new(r" ").unwrap();
+    this_result.q_ali = re_one.replace_all(&this_result.q_ali, "-").to_string();
+    this_result.g_ali = re_one.replace_all(&this_result.g_ali, "-").to_string();
+
+    let final_result = process_alignment_matches(this_result);
+
+    return final_result;
 }
 
-fn process_alignment_matches(result: QumaResult) -> QumaResult {
-    return ();
+/// Helper to implement find method for u8 slices
+///
+/// # Arguments
+///
+/// * `haystack` - byte slice to search
+/// * `needle` - byte slice to search for
+///
+/// # Returns
+///
+/// * `Option<usize>` - index of first match
+fn find_subsequence(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
+}
+
+/// Process alignment data to populate results dictionary
+///
+/// # Arguments
+///
+/// * `result` - QumaResult struct
+///
+/// # Returns
+///
+/// * `QumaResult` - QumaResult struct with populated results dictionary
+fn process_alignment_matches(mut result: QumaResult) -> QumaResult {
+    let g_ali = result.g_ali.as_bytes();
+    let q_ali = result.q_ali.as_bytes();
+
+    result.ali_len = q_ali.len() as i32;
+
+    let mut this_sum = 0;
+    let it = q_ali.iter().zip(g_ali.iter());
+    for (a, b) in it {
+        if a == b {
+            this_sum += 1;
+        } else if *a as char == 'T' && *b as char == 'C' {
+            this_sum += 1;
+        }
+    }
+
+    result.quma_match = this_sum;
+
+    let g_ali_count = g_ali.iter().filter(|&x| x == &b'-').count();
+    let q_ali_count = q_ali.iter().filter(|&x| x == &b'-').count();
+
+    result.gap = cmp::max(
+        g_ali_count.try_into().unwrap(),
+        q_ali_count.try_into().unwrap(),
+    );
+
+    let mut exit_cond = 0;
+    let mut i = 0;
+    while exit_cond == 0 {
+        let q_ali_len = q_ali.len();
+        let ni = find_subsequence(&q_ali[i..q_ali_len], b"CG");
+
+        if ni != None {
+            let ni_value = ni.unwrap();
+            if q_ali[ni_value] as char == 'T' {
+                result.quma_match += 1;
+                result.unconv += 1;
+                result.val += "0";
+            } else if q_ali[ni_value] as char == 'C' {
+                result.conv += 1;
+                result.val += "1";
+                result.menum += 1;
+            } else {
+                result.val += &q_ali[ni_value].to_string();
+            }
+
+            i = ni_value + 1;
+        } else {
+            exit_cond = 1;
+        }
+    }
+
+    if result.val == "" {
+        result.val = "-".to_string();
+    }
+
+    let results = generate_summary_stats(result);
+    return results;
 }
 
 /// Helper to generate summary statistics in QumaResult struct
@@ -449,7 +603,7 @@ fn process_alignment_matches(result: QumaResult) -> QumaResult {
 /// # Returns
 ///
 /// * `QumaResult` - QumaResult struct with summary statistics
-fn generate_summary_stats(result: QumaResult) -> QumaResult {
+fn generate_summary_stats(mut result: QumaResult) -> QumaResult {
     if result.conv + result.unconv != 0 {
         result.pconv = percentage(result.conv, result.unconv, "sum".to_string())
     } else {
@@ -517,8 +671,8 @@ fn find_best_dataset(ffres: QumaResult, frres: QumaResult) -> (QumaResult, i32) 
 /// # Returns
 ///
 /// * `String` - tabular quma-formatted string
-fn format_output(gseq: String, data: Vec<Reference>) -> String {
-    return String::from("TODO");
+fn format_output(gseq: String, _data: Vec<Reference>) -> String {
+    return format!("TODO: {}", gseq);
 }
 
 /// Run quma and return the quma object
