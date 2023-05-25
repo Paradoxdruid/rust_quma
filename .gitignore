@@ -74,3 +74,6 @@ docs/_build/
 
 # Notebooks
 *.ipynb
+
+# Mypy
+.mypy_cache/
