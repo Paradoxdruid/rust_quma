@@ -1,9 +1,9 @@
 use bio::alignment::pairwise::*;
 use bio::alignment::Alignment;
-// use bio::alignment::AlignmentOperation::*;
 use lazy_static::lazy_static;
 use pyo3::prelude::*;
 use regex::Regex;
+
 use std::cmp;
 use std::collections::HashMap;
 extern crate ndarray;
@@ -148,6 +148,16 @@ impl Quma {
             values: values,
         };
     }
+
+    #[getter]
+    fn get_values(&self) -> PyResult<String> {
+        Ok(self.values.clone())
+    }
+
+    #[getter]
+    fn get_data(&self) -> PyResult<Vec<Reference>> {
+        Ok(self.data.clone())
+    }
 }
 
 /// Parse genome file, removing white spaces and extra returns.
@@ -168,6 +178,7 @@ fn parse_genome(gfile_contents: String) -> String {
     let out_three = re_three.replace_all(&out_two, r"\r|\n|\r\n");
 
     let out_seq = parse_seq(out_three.to_string());
+    // println!("Genome sequence parsed: {}", out_seq);
     return out_seq;
 }
 
@@ -480,7 +491,9 @@ fn align_seq_and_generate_stats(gfile: String, qfile: String) -> QumaResult {
     let bio_gseq = gfile.lines().next().unwrap().as_bytes();
     let bio_qseq = qfile.lines().next().unwrap().as_bytes();
 
-    let mut aligner = Aligner::new(-10, -1, &quma_score);
+    // let mut aligner = Aligner::new(-10, -1, &quma_score);
+    let score = |a: u8, b: u8| if a == b { 1i32 } else { -1i32 };
+    let mut aligner = Aligner::new(-10, -1, &score);
     // TODO: Custom matrix for CpG
     // See https://docs.rs/bio/latest/src/bio/scores/blosum62.rs.html#89-94
 
@@ -490,13 +503,13 @@ fn align_seq_and_generate_stats(gfile: String, qfile: String) -> QumaResult {
 
     let fh_ = format!(">genome\n{}\n>que\n{}\n", genome_ali, query_ali);
 
-    let mut fh = fh_.lines();
+    let fh = fh_.lines();
 
     for (i, el) in fh.clone().enumerate() {
         if el.contains(">que") {
-            this_result.q_ali = fh.nth(i + 1).unwrap().to_string();
+            this_result.q_ali = fh.clone().nth(i + 1).unwrap().to_string();
         } else if el.contains(">genome") {
-            this_result.g_ali = fh.nth(i + 1).unwrap().to_string();
+            this_result.g_ali = fh.clone().nth(i + 1).unwrap().to_string();
         }
     }
 
@@ -683,7 +696,7 @@ fn format_output(gseq: String, _data: Vec<Reference>) -> String {
 
 /// A Python module implemented in Rust.
 #[pymodule]
-fn my_module(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
+fn rust_quma(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<Quma>()?;
     Ok(())
 }
