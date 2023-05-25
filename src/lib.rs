@@ -684,8 +684,32 @@ fn find_best_dataset(ffres: QumaResult, frres: QumaResult) -> (QumaResult, i32) 
 /// # Returns
 ///
 /// * `String` - tabular quma-formatted string
-fn format_output(gseq: String, _data: Vec<Reference>) -> String {
-    return format!("TODO: {}", gseq);
+fn format_output(gseq: String, data: Vec<Reference>) -> String {
+    let header_output = format!("genome\t0\t{}\t1\t0\n", gseq);
+
+    let mut output_holder: Vec<String> = Vec::new();
+    for reference in data {
+        output_holder.push(format!("{}\t", reference.fasta.pos));
+        output_holder.push(format!("{}\t", reference.fasta.com));
+        output_holder.push(format!("{}\t", reference.fasta.seq));
+        output_holder.push(format!("{}\t", reference.res.q_ali));
+        output_holder.push(format!("{}\t", reference.res.g_ali));
+        output_holder.push(format!("{}\t", reference.res.ali_len));
+        output_holder.push(format!("{}\t", reference.res.ali_mis));
+        output_holder.push(format!("{}\t", reference.res.perc));
+        output_holder.push(format!("{}\t", reference.res.gap));
+        output_holder.push(format!("{}\t", reference.res.menum));
+        output_holder.push(format!("{}\t", reference.res.unconv));
+        output_holder.push(format!("{}\t", reference.res.conv));
+        output_holder.push(format!("{}\t", reference.res.pconv));
+        output_holder.push(format!("{}\t", reference.res.val));
+        output_holder.push(format!("{}\t", reference.dir));
+        output_holder.push(format!("{}\t", reference.gdir));
+        output_holder.push(format!("\n"));
+    }
+    let joined = output_holder.join("");
+
+    return format!("{}{}", header_output, joined);
 }
 
 /// Run quma and return the quma object
