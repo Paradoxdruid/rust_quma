@@ -1,6 +1,7 @@
 [project]
 name = "rust_quma"
 authors = [{name = "Andrew J. Bonham", email = "bonham@gmail.com"}]
+readme = "README.md"
 license = {file = "LICENSE"}
 requires-python = ">=3.7"
 classifiers = [
@@ -9,6 +10,9 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+]
+dependencies = [
+    "biopython",
 ]
 keywords = ["genomics", "methylation", "DNA sequencing"]
 
