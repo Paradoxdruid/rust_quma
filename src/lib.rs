@@ -1,8 +1,8 @@
 use bio::alignment::pairwise::*;
 use bio::alignment::Alignment;
+use once_cell::sync::Lazy;
 use pyo3::prelude::*;
 use regex::Regex;
-use once_cell::sync::Lazy;
 
 use std::cmp;
 use std::collections::HashMap;
@@ -38,9 +38,10 @@ static MATRIX: Lazy<ndarray::Array2<i32>> = Lazy::new(|| {
             -1, -3, -3, -1, -2, -1, -2, -2, -1, -4, -1, -1, -4, -1, -3, -1, -3, -1, -3, -1, -2, -2,
             -1, -2, -1, -1, -1, -1, -1, -4, -3, -1, -1, -3, -1, -3, -2, -2, -2, -1, -1, -1, -2, -2,
             -2, -2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -2, -4, 5, -4, -4, -4, 1, -4, 1, 1,
-            -4, -1, -4, -1, -1, -2, 5
-        ]
-    ).unwrap()
+            -4, -1, -4, -1, -1, -2, 5,
+        ],
+    )
+    .unwrap()
 });
 
 #[inline]
@@ -157,15 +158,9 @@ impl Quma {
     }
 }
 
-static RE1: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"^[\r\s]+").unwrap()
-});
-static RE2: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"[\r\s]+$").unwrap()
-});
-static RE3: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(\r|\n|\r\n){2}").unwrap()
-});
+static RE1: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[\r\s]+").unwrap());
+static RE2: Lazy<Regex> = Lazy::new(|| Regex::new(r"[\r\s]+$").unwrap());
+static RE3: Lazy<Regex> = Lazy::new(|| Regex::new(r"(\r|\n|\r\n){2}").unwrap());
 
 /// Parse genome file, removing white spaces and extra returns.
 ///
@@ -184,25 +179,15 @@ fn parse_genome(gfile_contents: &str) -> String {
     return parse_seq(&out_three);
 }
 
-static SCRUB1: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"\r\n\r\n").unwrap()
-});
+static SCRUB1: Lazy<Regex> = Lazy::new(|| Regex::new(r"\r\n\r\n").unwrap());
 
-static SCRUB2: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"\n\n").unwrap()
-});
+static SCRUB2: Lazy<Regex> = Lazy::new(|| Regex::new(r"\n\n").unwrap());
 
-static SCRUB3: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"\r\r").unwrap()
-});
+static SCRUB3: Lazy<Regex> = Lazy::new(|| Regex::new(r"\r\r").unwrap());
 
-static SCRUB4: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"\r\n").unwrap()
-});
+static SCRUB4: Lazy<Regex> = Lazy::new(|| Regex::new(r"\r\n").unwrap());
 
-static SCRUB5: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"\r").unwrap()
-});
+static SCRUB5: Lazy<Regex> = Lazy::new(|| Regex::new(r"\r").unwrap());
 
 /// Remove whitespace and repeated newlines.
 ///
@@ -223,6 +208,10 @@ fn scrub_whitespace(string: &str) -> String {
     return trimmed.to_string();
 }
 
+static CLEAN1: Lazy<Regex> = Lazy::new(|| Regex::new(r"^>").unwrap());
+
+static CLEAN2: Lazy<Regex> = Lazy::new(|| Regex::new(r"\s*$").unwrap());
+
 /// Parse bisulfite sequencing fasta file
 ///
 /// # Returns
@@ -240,14 +229,12 @@ fn parse_biseq(qfile_contents: &str) -> Vec<Fasta> {
             seq: String::from(""),
         };
         if line.contains(">") {
-            let re_one = Regex::new(r"^>").unwrap();
-            let trim_one = re_one.replace_all(&line, "");
-            let re_two = Regex::new(r"\s*$").unwrap();
-            let trim_two = re_two.replace_all(&trim_one, "");
-            fa.com = trim_two.to_string();
+            let trimmed = CLEAN1.replace_all(&line, "");
+            let trimmed = CLEAN2.replace_all(&trimmed, "");
+            fa.com = trimmed.to_string();
             biseq.push(fa);
         } else {
-            let allowed = check_char_in_allowed(line, ALPHABET);
+            let allowed = check_char_in_allowed(&line, ALPHABET);
             if allowed == "" {
                 continue;
             }
@@ -258,10 +245,7 @@ fn parse_biseq(qfile_contents: &str) -> Vec<Fasta> {
     return biseq;
 }
 
-
-static FILE_PATTERNS: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"^\s*>.*?\n").unwrap()
-});
+static FILE_PATTERNS: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*>.*?\n").unwrap());
 
 /// Extract sequence strings from the string of a text file
 ///
@@ -297,14 +281,10 @@ fn check_char_in_allowed(seq: &str, pattern: &str) -> String {
     return seq.chars().filter(|&p| pattern.contains(p)).collect();
 }
 
-static RE4: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"[0-9]| |\t|\n|\r|\f").unwrap()
-});
+static RE4: Lazy<Regex> = Lazy::new(|| Regex::new(r"[0-9]| |\t|\n|\r|\f").unwrap());
 
 // hardcode 60 as nothing else is ever passed
-static RE5: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(.{1,60})").unwrap()
-});
+static RE5: Lazy<Regex> = Lazy::new(|| Regex::new(r"(.{1,60})").unwrap());
 
 /// Write a sequence string to a fasta-formatted text file contents
 ///
@@ -354,7 +334,7 @@ fn process_fasta_output(
         let seq_here = fa.seq.clone();
 
         let qfile_f_processed = fasta_make(&seq_here, &qfile_f);
-        let qfile_r_processed = fasta_make(&rev_comp(seq_here), &qfile_r);
+        let qfile_r_processed = fasta_make(&rev_comp(&seq_here), &qfile_r);
 
         let fwd_result = align_seq_and_generate_stats(&qfile_f_processed, &gfilep_f);
         let rev_result = align_seq_and_generate_stats(&qfile_r_processed, &gfilep_f);
@@ -396,7 +376,7 @@ fn process_fasta_output(
 /// # Returns
 ///
 /// * `string` - reverse complement of sequence
-fn rev_comp(seq: String) -> String {
+fn rev_comp(seq: &str) -> String {
     let reversed = seq.chars().rev().collect::<String>();
 
     fn expand_env(value: &str, env_user: &EnvMap) -> String {
@@ -459,7 +439,11 @@ fn rev_comp(seq: String) -> String {
 /// # Returns
 ///
 /// * `tuple` - tuple of String, String query and genomic aligned substrings
-fn matching_substrings(alignment: Alignment, bio_gseq: &[u8], bio_qseq: &[u8]) -> (String, String) {
+fn matching_substrings(
+    alignment: &Alignment,
+    bio_gseq: &[u8],
+    bio_qseq: &[u8],
+) -> (String, String) {
     let g_substring =
         String::from_utf8(bio_gseq[alignment.xstart..alignment.xend].to_vec()).unwrap();
     let q_substring =
@@ -512,7 +496,7 @@ fn align_seq_and_generate_stats(gfile: &str, qfile: &str) -> QumaResult {
 
     let bio_alignments = aligner.local(bio_gseq, bio_qseq);
 
-    let (query_ali, genome_ali) = matching_substrings(bio_alignments, bio_gseq, bio_qseq);
+    let (query_ali, genome_ali) = matching_substrings(&bio_alignments, &bio_gseq, &bio_qseq);
 
     let fh_ = format!(">genome\n{}\n>que\n{}\n", genome_ali, query_ali);
 
@@ -526,9 +510,11 @@ fn align_seq_and_generate_stats(gfile: &str, qfile: &str) -> QumaResult {
         }
     }
 
-    let re_one = Regex::new(r" ").unwrap();
-    this_result.q_ali = re_one.replace_all(&this_result.q_ali, "-").to_string();
-    this_result.g_ali = re_one.replace_all(&this_result.g_ali, "-").to_string();
+    // let re_one = Regex::new(r" ").unwrap();
+    this_result.q_ali = this_result.q_ali.replace(" ", "-");
+    this_result.g_ali = this_result.g_ali.replace(" ", "-");
+    // this_result.q_ali = re_one.replace_all(&this_result.q_ali, "-").to_string();
+    // this_result.g_ali = re_one.replace_all(&this_result.g_ali, "-").to_string();
 
     let final_result = process_alignment_matches(this_result);
 
@@ -679,11 +665,11 @@ fn find_best_dataset(ffres: QumaResult, frres: QumaResult) -> (QumaResult, i32) 
     if ffres.ali_len > frres.ali_len {
         let fres = ffres;
         let fdir = 1;
-        return (fres, fdir);
+        return (fres.clone(), fdir);
     } else {
         let fres = frres;
         let fdir = -1;
-        return (fres, fdir);
+        return (fres.clone(), fdir);
     }
 }
 

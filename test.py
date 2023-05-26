@@ -6,7 +6,7 @@ import python_quma
 
 import_hook.install(release=True)
 
-import rust_quma  # noqa: E402
+import rust_quma  # noqa # type: ignore
 
 start = time.perf_counter()
 for _ in range(100):
