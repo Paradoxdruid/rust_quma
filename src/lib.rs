@@ -46,18 +46,28 @@ static MATRIX: Lazy<ndarray::Array2<i32>> = Lazy::new(|| {
 
 #[inline]
 fn lookup(a: u8) -> usize {
-    // FIXME: These values are wrong, need to account for 16,16 instead of 27,27
-    if a == b'Y' {
-        23
-    } else if a == b'Z' {
-        24
-    } else if a == b'X' {
-        25
-    } else if a == b'*' {
-        26
-    } else {
-        (a - 65) as usize
-    }
+    // matrix alphabet:  ATGCSWRYKMBVHDNU
+
+    let mappings = HashMap::from([
+        (b'A', 1),
+        (b'T', 2),
+        (b'G', 3),
+        (b'C', 4),
+        (b'S', 5),
+        (b'W', 6),
+        (b'R', 7),
+        (b'Y', 8),
+        (b'K', 9),
+        (b'M', 10),
+        (b'B', 11),
+        (b'V', 12),
+        (b'H', 13),
+        (b'D', 14),
+        (b'N', 15),
+        (b'U', 16),
+    ]);
+
+    *mappings.get(&a).unwrap() as usize
 }
 
 // struct of quma aligment comparison results
@@ -210,7 +220,7 @@ fn scrub_whitespace(string: &str) -> String {
 
 static CLEAN1: Lazy<Regex> = Lazy::new(|| Regex::new(r"^>").unwrap());
 
-static CLEAN2: Lazy<Regex> = Lazy::new(|| Regex::new(r"\s*$").unwrap());
+// static CLEAN2: Lazy<Regex> = Lazy::new(|| Regex::new(r"\s*$").unwrap());
 
 /// Parse bisulfite sequencing fasta file
 ///
@@ -219,30 +229,42 @@ static CLEAN2: Lazy<Regex> = Lazy::new(|| Regex::new(r"\s*$").unwrap());
 /// * `vector` - vector of Fasta structs of sequence reads
 fn parse_biseq(qfile_contents: &str) -> Vec<Fasta> {
     let multi_clean = scrub_whitespace(&qfile_contents);
-    let multi_split = multi_clean.lines();
+    let mut multi_split = multi_clean.lines();
 
-    let mut biseq = Vec::<Fasta>::new();
-    for line in multi_split {
-        let mut fa = Fasta {
-            com: String::from(""),
-            pos: String::from(""),
-            seq: String::from(""),
-        };
-        if line.contains(">") {
-            let trimmed = CLEAN1.replace_all(&line, "");
-            let trimmed = CLEAN2.replace_all(&trimmed, "");
-            fa.com = trimmed.to_string();
-            biseq.push(fa);
-        } else {
-            let allowed = check_char_in_allowed(&line, ALPHABET);
-            if allowed == "" {
-                continue;
+    let mut outcome = Vec::<Fasta>::new();
+
+    let mut n = 0;
+    let mut tmp_name: Option<&str> = None;
+    let mut tmp_seq: Option<&str> = None;
+    while n < 1 {
+        let line = multi_split.next();
+        match line {
+            Some(a) => match a.starts_with('>') {
+                true => {
+                    tmp_name = Some(a);
+                }
+                false => {
+                    tmp_seq = Some(a);
+                }
+            },
+            None => n += 1,
+        }
+        match (tmp_name, tmp_seq) {
+            (Some(x), Some(y)) => {
+                let fa = Fasta {
+                    com: x.to_string(),
+                    pos: String::from(""),
+                    seq: y.to_string(),
+                };
+                outcome.push(fa);
+                tmp_name = None;
+                tmp_seq = None;
             }
-            let seq = allowed.to_uppercase();
-            fa.seq = seq;
+            _ => continue,
         }
     }
-    return biseq;
+
+    return outcome;
 }
 
 static FILE_PATTERNS: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*>.*?\n").unwrap());
@@ -298,7 +320,7 @@ static RE5: Lazy<Regex> = Lazy::new(|| Regex::new(r"(.{1,60})").unwrap());
 /// * `string` - fasta-formatted text file contents
 fn fasta_make(seq: &str, seq_name: &str) -> String {
     let seq = RE4.replace_all(&seq, "");
-    let seq = RE5.replace_all(&seq, r"\1\n");
+    // let seq = RE5.replace_all(&seq, r"\1\n");
 
     return format!(">{}\n{}", seq_name, seq);
 }
@@ -469,7 +491,7 @@ fn quma_score(a: u8, b: u8) -> i32 {
 /// # Returns
 ///
 /// * `QumaResult` - alignment result struct
-fn align_seq_and_generate_stats(gfile: &str, qfile: &str) -> QumaResult {
+fn align_seq_and_generate_stats(qfile: &str, gfile: &str) -> QumaResult {
     let mut this_result = QumaResult {
         q_ali: "".to_string(),
         g_ali: "".to_string(),
@@ -485,12 +507,10 @@ fn align_seq_and_generate_stats(gfile: &str, qfile: &str) -> QumaResult {
         ali_len: 0,
     };
 
-    let bio_gseq = gfile.lines().next().unwrap().as_bytes();
-    let bio_qseq = qfile.lines().next().unwrap().as_bytes();
+    let bio_gseq = gfile.lines().nth(1).unwrap().as_bytes();
+    let bio_qseq = qfile.lines().nth(1).unwrap().as_bytes();
 
-    // let mut aligner = Aligner::new(-10, -1, &quma_score);
-    let score = |a: u8, b: u8| if a == b { 1i32 } else { -1i32 };
-    let mut aligner = Aligner::new(-10, -1, &score);
+    let mut aligner = Aligner::new(-10, -1, &quma_score);
     // TODO: Custom matrix for CpG
     // See https://docs.rs/bio/latest/src/bio/scores/blosum62.rs.html#89-94
 
