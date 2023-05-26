@@ -1,8 +1,8 @@
 use bio::alignment::pairwise::*;
 use bio::alignment::Alignment;
-use lazy_static::lazy_static;
 use pyo3::prelude::*;
 use regex::Regex;
+use once_cell::sync::Lazy;
 
 use std::cmp;
 use std::collections::HashMap;
@@ -19,14 +19,12 @@ type EnvMap = HashMap<String, String>;
 
 // See https://docs.rs/bio/latest/bio/alignment/pairwise/index.html
 
-lazy_static! {
-    static ref ALPHABET: String = "ACGTURYMWSKDHBVNacgturymwskdhbvn".to_string();
-}
+static ALPHABET: &str = "ACGTURYMWSKDHBVNacgturymwskdhbvn";
 
-lazy_static! {
-    // matrix alphabet:  ATGCSWRYKMBVHDNU
-    // see https://docs.rs/bio/latest/src/bio/scores/blosum62.rs.html#89-94
-    static ref MATRIX: ndarray::Array2<i32> = ndarray::Array::from_shape_vec(
+// matrix alphabet:  ATGCSWRYKMBVHDNU
+// see https://docs.rs/bio/latest/src/bio/scores/blosum62.rs.html#89-94
+static MATRIX: Lazy<ndarray::Array2<i32>> = Lazy::new(|| {
+    ndarray::Array::from_shape_vec(
         (16, 16),
         vec![
             5, -4, -4, -4, -4, 1, 1, -4, -4, 1, -4, -1, -1, -1, -2, -4, -4, 5, -4, 5, -4, 1, -4, 1,
@@ -42,9 +40,8 @@ lazy_static! {
             -2, -2, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -2, -4, 5, -4, -4, -4, 1, -4, 1, 1,
             -4, -1, -4, -1, -1, -2, 5
         ]
-    )
-    .unwrap();
-}
+    ).unwrap()
+});
 
 #[inline]
 fn lookup(a: u8) -> usize {
@@ -128,16 +125,16 @@ struct Quma {
 impl Quma {
     #[new]
     fn py_new(gfile_contents: String, qfile_contents: String) -> Self {
-        let gseq = parse_genome(gfile_contents.clone());
-        let qseq = parse_biseq(qfile_contents.clone());
-        let gfilep_f = fasta_make(gseq.clone(), String::from("genomeF"));
+        let gseq = parse_genome(&gfile_contents);
+        let qseq = parse_biseq(&qfile_contents);
+        let gfilep_f = fasta_make(&gseq, "genomeF");
         let data: Vec<Reference> = process_fasta_output(
             qseq.clone(),
             String::from("queryF"),
             String::from("queryR"),
             gfilep_f.clone(),
         );
-        let values = format_output(gseq.clone(), data.clone());
+        let values = format_output(&gseq, &data);
         return Quma {
             gfile_contents: gfile_contents,
             qfile_contents: qfile_contents,
@@ -160,6 +157,16 @@ impl Quma {
     }
 }
 
+static RE1: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^[\r\s]+").unwrap()
+});
+static RE2: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"[\r\s]+$").unwrap()
+});
+static RE3: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(\r|\n|\r\n){2}").unwrap()
+});
+
 /// Parse genome file, removing white spaces and extra returns.
 ///
 /// # Arguments
@@ -169,18 +176,33 @@ impl Quma {
 /// # Returns
 ///
 /// * `string` - parsed and curated string of genome sequence
-fn parse_genome(gfile_contents: String) -> String {
-    let re_one = Regex::new(r"^[\r\s]+").unwrap();
-    let out_one = re_one.replace_all(&gfile_contents, "");
-    let re_two = Regex::new(r"[\r\s]+$").unwrap();
-    let out_two = re_two.replace_all(&out_one, "");
-    let re_three = Regex::new(r"(\r|\n|\r\n){2}").unwrap();
-    let out_three = re_three.replace_all(&out_two, r"\r|\n|\r\n");
+fn parse_genome(gfile_contents: &str) -> String {
+    let out_one = RE1.replace_all(&gfile_contents, "");
+    let out_two = RE2.replace_all(&out_one, "");
+    let out_three = RE3.replace_all(&out_two, r"\r|\n|\r\n");
 
-    let out_seq = parse_seq(out_three.to_string());
-    // println!("Genome sequence parsed: {}", out_seq);
-    return out_seq;
+    return parse_seq(&out_three);
 }
+
+static SCRUB1: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"\r\n\r\n").unwrap()
+});
+
+static SCRUB2: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"\n\n").unwrap()
+});
+
+static SCRUB3: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"\r\r").unwrap()
+});
+
+static SCRUB4: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"\r\n").unwrap()
+});
+
+static SCRUB5: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"\r").unwrap()
+});
 
 /// Remove whitespace and repeated newlines.
 ///
@@ -191,19 +213,14 @@ fn parse_genome(gfile_contents: String) -> String {
 /// # Returns
 ///
 /// * `string` - fasta string with whitespace removed
-fn scrub_whitespace(string: String) -> String {
-    let trim_one = string.trim();
-    let re_one = Regex::new(r"\r\n\r\n").unwrap();
-    let trim_two = re_one.replace_all(&trim_one, r"\r\n");
-    let re_two = Regex::new(r"\n\n").unwrap();
-    let trim_three = re_two.replace_all(&trim_two, r"\n");
-    let re_three = Regex::new(r"\r\r").unwrap();
-    let trim_four = re_three.replace_all(&trim_three, r"\r");
-    let re_four = Regex::new(r"\r\n").unwrap();
-    let trim_five = re_four.replace_all(&trim_four, r"\n");
-    let re_five = Regex::new(r"\r").unwrap();
-    let trim_six = re_five.replace_all(&trim_five, r"\n");
-    return trim_six.to_string();
+fn scrub_whitespace(string: &str) -> String {
+    let trimmed = string.trim();
+    let trimmed = SCRUB1.replace_all(&trimmed, r"\r\n");
+    let trimmed = SCRUB2.replace_all(&trimmed, r"\n");
+    let trimmed = SCRUB3.replace_all(&trimmed, r"\r");
+    let trimmed = SCRUB4.replace_all(&trimmed, r"\n");
+    let trimmed = SCRUB5.replace_all(&trimmed, r"\n");
+    return trimmed.to_string();
 }
 
 /// Parse bisulfite sequencing fasta file
@@ -211,8 +228,8 @@ fn scrub_whitespace(string: String) -> String {
 /// # Returns
 ///
 /// * `vector` - vector of Fasta structs of sequence reads
-fn parse_biseq(qfile_contents: String) -> Vec<Fasta> {
-    let multi_clean = scrub_whitespace(qfile_contents);
+fn parse_biseq(qfile_contents: &str) -> Vec<Fasta> {
+    let multi_clean = scrub_whitespace(&qfile_contents);
     let multi_split = multi_clean.lines();
 
     let mut biseq = Vec::<Fasta>::new();
@@ -230,7 +247,7 @@ fn parse_biseq(qfile_contents: String) -> Vec<Fasta> {
             fa.com = trim_two.to_string();
             biseq.push(fa);
         } else {
-            let allowed = check_char_in_allowed(line.to_string(), ALPHABET.to_string());
+            let allowed = check_char_in_allowed(line, ALPHABET);
             if allowed == "" {
                 continue;
             }
@@ -241,6 +258,11 @@ fn parse_biseq(qfile_contents: String) -> Vec<Fasta> {
     return biseq;
 }
 
+
+static FILE_PATTERNS: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^\s*>.*?\n").unwrap()
+});
+
 /// Extract sequence strings from the string of a text file
 ///
 /// # Arguments
@@ -250,22 +272,15 @@ fn parse_biseq(qfile_contents: String) -> Vec<Fasta> {
 /// # Returns
 ///
 /// * `string` - sequence string
-fn parse_seq(seq: String) -> String {
-    let re_one = Regex::new(r"\r\n").unwrap();
-    let seq_one = re_one.replace_all(&seq, r"\n").to_string();
-    let re_two = Regex::new(r"\r").unwrap();
-    let seq_two = re_two.replace_all(&seq_one, r"\n").to_string();
-    let seq_three = seq_two.to_uppercase();
+fn parse_seq(seq: &str) -> String {
+    let seq = seq.replace("\r\n", "\n").replace("\r", "\n").to_uppercase();
 
     // Different file patterns
-    let re_three = Regex::new(r"^\s*>.*?\n").unwrap();
-    let seq_four = re_three.replace_all(&seq_three, r"").to_string();
+    let seq = FILE_PATTERNS.replace_all(&seq, r"");
 
     // TODO: Did not implement unused fasta patterns
 
-    let final_seq = check_char_in_allowed(seq_four, ALPHABET.to_string());
-
-    return final_seq;
+    return check_char_in_allowed(&seq, ALPHABET);
 }
 
 /// Return only charcters in string present in pattern
@@ -278,17 +293,18 @@ fn parse_seq(seq: String) -> String {
 /// # Returns
 ///
 /// * `string` - sequence string with only allowed characters
-fn check_char_in_allowed(mut seq: String, pattern: String) -> String {
-    let pattern_chars = pattern;
-    seq.retain(|p| {
-        if !pattern_chars.contains(*&p) {
-            false
-        } else {
-            true
-        }
-    });
-    return seq;
+fn check_char_in_allowed(seq: &str, pattern: &str) -> String {
+    return seq.chars().filter(|&p| pattern.contains(p)).collect();
 }
+
+static RE4: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"[0-9]| |\t|\n|\r|\f").unwrap()
+});
+
+// hardcode 60 as nothing else is ever passed
+static RE5: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(.{1,60})").unwrap()
+});
 
 /// Write a sequence string to a fasta-formatted text file contents
 ///
@@ -300,15 +316,11 @@ fn check_char_in_allowed(mut seq: String, pattern: String) -> String {
 /// # Returns
 ///
 /// * `string` - fasta-formatted text file contents
-fn fasta_make(seq: String, seq_name: String) -> String {
-    let re_one = Regex::new(r"[0-9]| |\t|\n|\r|\f").unwrap();
-    let seq_one = re_one.replace_all(&seq, "").to_string();
-    let re_two = Regex::new(r"(.{1,60})").unwrap();
-    // hardcode 60 as nothing else is ever passed
-    let seq_two = re_two.replace_all(&seq_one, r"\1\n").to_string();
+fn fasta_make(seq: &str, seq_name: &str) -> String {
+    let seq = RE4.replace_all(&seq, "");
+    let seq = RE5.replace_all(&seq, r"\1\n");
 
-    let final_str = format!(">{}\n{}", seq_name, seq_two);
-    return final_str;
+    return format!(">{}\n{}", seq_name, seq);
 }
 
 /// Process fasta alignment
@@ -339,12 +351,13 @@ fn process_fasta_output(
     for mut fa in qseq {
         pos += 1;
         fa.pos = pos.to_string();
+        let seq_here = fa.seq.clone();
 
-        let qfile_f_processed = fasta_make(fa.seq.clone(), qfile_f.clone());
-        let qfile_r_processed = fasta_make(rev_comp(fa.seq.clone()), qfile_r.clone());
+        let qfile_f_processed = fasta_make(&seq_here, &qfile_f);
+        let qfile_r_processed = fasta_make(&rev_comp(seq_here), &qfile_r);
 
-        let fwd_result = align_seq_and_generate_stats(qfile_f_processed, gfilep_f.clone());
-        let rev_result = align_seq_and_generate_stats(qfile_r_processed, gfilep_f.clone());
+        let fwd_result = align_seq_and_generate_stats(&qfile_f_processed, &gfilep_f);
+        let rev_result = align_seq_and_generate_stats(&qfile_r_processed, &gfilep_f);
 
         let (this_result, final_direction) = find_best_dataset(fwd_result, rev_result);
 
@@ -472,7 +485,7 @@ fn quma_score(a: u8, b: u8) -> i32 {
 /// # Returns
 ///
 /// * `QumaResult` - alignment result struct
-fn align_seq_and_generate_stats(gfile: String, qfile: String) -> QumaResult {
+fn align_seq_and_generate_stats(gfile: &str, qfile: &str) -> QumaResult {
     let mut this_result = QumaResult {
         q_ali: "".to_string(),
         g_ali: "".to_string(),
@@ -684,7 +697,7 @@ fn find_best_dataset(ffres: QumaResult, frres: QumaResult) -> (QumaResult, i32) 
 /// # Returns
 ///
 /// * `String` - tabular quma-formatted string
-fn format_output(gseq: String, data: Vec<Reference>) -> String {
+fn format_output(gseq: &str, data: &Vec<Reference>) -> String {
     let header_output = format!("genome\t0\t{}\t1\t0\n", gseq);
 
     let mut output_holder: Vec<String> = Vec::new();

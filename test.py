@@ -1,7 +1,12 @@
 import time
 
+from maturin import import_hook
+
 import python_quma
-import rust_quma
+
+import_hook.install(release=True)
+
+import rust_quma  # noqa: E402
 
 start = time.perf_counter()
 for _ in range(100):
@@ -36,4 +41,4 @@ rust_time = end - start
 print(rust_quma_output.values)
 print(f"Rust version took {rust_time:0.6f} seconds")
 
-print(f"Python version is {rust_time/pytime:0.2f} times faster")
+print(f"Rust version is {pytime/rust_time:0.2f} times faster")
