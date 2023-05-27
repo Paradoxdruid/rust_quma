@@ -112,6 +112,7 @@ struct Reference {
 
 // Quma methylation analysis parser for bisulfite conversion DNA sequencing.
 #[pyclass]
+#[allow(dead_code)]
 struct Quma {
     gfile_contents: String,
     qfile_contents: String,
@@ -220,8 +221,6 @@ fn scrub_whitespace(string: &str) -> String {
 
 static CLEAN1: Lazy<Regex> = Lazy::new(|| Regex::new(r"^>").unwrap());
 
-// static CLEAN2: Lazy<Regex> = Lazy::new(|| Regex::new(r"\s*$").unwrap());
-
 /// Parse bisulfite sequencing fasta file
 ///
 /// # Returns
@@ -251,8 +250,9 @@ fn parse_biseq(qfile_contents: &str) -> Vec<Fasta> {
         }
         match (tmp_name, tmp_seq) {
             (Some(x), Some(y)) => {
+                let processed_x = CLEAN1.replace_all(&x, "");
                 let fa = Fasta {
-                    com: x.to_string(),
+                    com: processed_x.to_string(),
                     pos: String::from(""),
                     seq: y.to_string(),
                 };
@@ -304,9 +304,6 @@ fn check_char_in_allowed(seq: &str, pattern: &str) -> String {
 }
 
 static RE4: Lazy<Regex> = Lazy::new(|| Regex::new(r"[0-9]| |\t|\n|\r|\f").unwrap());
-
-// hardcode 60 as nothing else is ever passed
-static RE5: Lazy<Regex> = Lazy::new(|| Regex::new(r"(.{1,60})").unwrap());
 
 /// Write a sequence string to a fasta-formatted text file contents
 ///
@@ -530,11 +527,8 @@ fn align_seq_and_generate_stats(qfile: &str, gfile: &str) -> QumaResult {
         }
     }
 
-    // let re_one = Regex::new(r" ").unwrap();
     this_result.q_ali = this_result.q_ali.replace(" ", "-");
     this_result.g_ali = this_result.g_ali.replace(" ", "-");
-    // this_result.q_ali = re_one.replace_all(&this_result.q_ali, "-").to_string();
-    // this_result.g_ali = re_one.replace_all(&this_result.g_ali, "-").to_string();
 
     let final_result = process_alignment_matches(this_result);
 
@@ -594,27 +588,30 @@ fn process_alignment_matches(mut result: QumaResult) -> QumaResult {
 
     let mut exit_cond = 0;
     let mut i = 0;
-    while exit_cond == 0 {
+    while exit_cond < 100 {
         let q_ali_len = q_ali.len();
         let ni = find_subsequence(&q_ali[i..q_ali_len], b"CG");
+        match ni {
+            Some(val) => {
+                let ni_value = val + i;
+                if q_ali[ni_value] as char == 'T' {
+                    result.quma_match += 1;
+                    result.unconv += 1;
+                    result.val += "0";
+                } else if q_ali[ni_value] as char == 'C' {
+                    result.conv += 1;
+                    result.val += "1";
+                    result.menum += 1;
+                } else {
+                    result.val += &q_ali[ni_value].to_string();
+                }
 
-        if ni != None {
-            let ni_value = ni.unwrap();
-            if q_ali[ni_value] as char == 'T' {
-                result.quma_match += 1;
-                result.unconv += 1;
-                result.val += "0";
-            } else if q_ali[ni_value] as char == 'C' {
-                result.conv += 1;
-                result.val += "1";
-                result.menum += 1;
-            } else {
-                result.val += &q_ali[ni_value].to_string();
+                i = ni_value + 1;
+                exit_cond += 1;
+            },
+            None => {
+                exit_cond = 1001;
             }
-
-            i = ni_value + 1;
-        } else {
-            exit_cond = 1;
         }
     }
 
