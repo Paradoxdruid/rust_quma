@@ -74,17 +74,40 @@ fn lookup(a: u8) -> usize {
 #[pyclass]
 #[derive(Clone)]
 struct QumaResult {
+    #[pyo3(get, set)]
     q_ali: String,
+
+    #[pyo3(get, set)]
     g_ali: String,
+
+    #[pyo3(get, set)]
     val: String,
+
+    #[pyo3(get, set)]
     perc: f32,
+
+    #[pyo3(get, set)]
     pconv: f32,
+
+    #[pyo3(get, set)]
     gap: i32,
+
+    #[pyo3(get, set)]
     menum: i32,
+
+    #[pyo3(get, set)]
     unconv: i32,
+
+    #[pyo3(get, set)]
     conv: i32,
+
+    #[pyo3(get, set)]
     quma_match: i32,
+
+    #[pyo3(get, set)]
     ali_mis: i32,
+
+    #[pyo3(get, set)]
     ali_len: i32,
 }
 
@@ -92,8 +115,13 @@ struct QumaResult {
 #[pyclass]
 #[derive(Clone)]
 struct Fasta {
+    #[pyo3(get, set)]
     com: String,
+
+    #[pyo3(get, set)]
     pos: String,
+
+    #[pyo3(get, set)]
     seq: String,
 }
 
@@ -103,23 +131,47 @@ struct Fasta {
 #[pyclass]
 #[derive(Clone)]
 struct Reference {
+    #[pyo3(get, set)]
     fasta: Fasta,
+
+    #[pyo3(get, set)]
     res: QumaResult,
+
+    #[pyo3(get, set)]
     dir: i32,
+
+    #[pyo3(get, set)]
     gdir: i32,
+
+    #[pyo3(get, set)]
     exc: i32,
 }
+
+// FIXME: Pickling:  https://github.com/PyO3/pyo3/issues/100
 
 // Quma methylation analysis parser for bisulfite conversion DNA sequencing.
 #[pyclass]
 #[allow(dead_code)]
 struct Quma {
+    #[pyo3(get, set)]
     gfile_contents: String,
+
+    #[pyo3(get, set)]
     qfile_contents: String,
+
+    #[pyo3(get, set)]
     gseq: String,
+
+    #[pyo3(get, set)]
     qseq: Vec<Fasta>,
+
+    #[pyo3(get, set)]
     gfilep_f: String,
+
+    #[pyo3(get, set)]
     data: Vec<Reference>,
+
+    #[pyo3(get, set)]
     values: String,
 }
 
@@ -158,15 +210,15 @@ impl Quma {
         };
     }
 
-    #[getter]
-    fn get_values(&self) -> PyResult<String> {
-        Ok(self.values.clone())
-    }
+    // #[getter]
+    // fn get_values(&self) -> PyResult<String> {
+    //     Ok(self.values.clone())
+    // }
 
-    #[getter]
-    fn get_data(&self) -> PyResult<Vec<Reference>> {
-        Ok(self.data.clone())
-    }
+    // #[getter]
+    // fn get_data(&self) -> PyResult<Vec<Reference>> {
+    //     Ok(self.data.clone())
+    // }
 }
 
 static RE1: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[\r\s]+").unwrap());
@@ -738,6 +790,7 @@ fn format_output(gseq: &str, data: &Vec<Reference>) -> String {
 #[pymodule]
 fn rust_quma(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<Quma>()?;
+    m.add_class::<Reference>()?;
     Ok(())
 }
 // fn rust_quma(_py: Python, m: &PyModule) -> PyResult<()> {
