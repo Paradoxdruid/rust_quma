@@ -780,20 +780,17 @@ fn format_output(gseq: &str, data: &Vec<Reference>) -> String {
     return format!("{}{}", header_output, joined);
 }
 
-/// Run quma and return the quma object
-// #[pyfunction]
-// fn quma(seq: String) -> PyResult<String> {
-//     Ok(Quma::new())
-// }
+// Run quma and return the quma object
+#[pyfunction]
+fn quma(gseq: String, qseq: String) -> PyResult<Quma> {
+    Ok::<Quma, PyErr>(Quma::py_new(gseq.clone(), qseq.clone()))
+}
 
 /// A Python module implemented in Rust.
 #[pymodule]
 fn rust_quma(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
     m.add_class::<Quma>()?;
     m.add_class::<Reference>()?;
+    m.add_function(wrap_pyfunction!(quma, m)?)?;
     Ok(())
 }
-// fn rust_quma(_py: Python, m: &PyModule) -> PyResult<()> {
-//     m.add_function(wrap_pyfunction!(quma, m)?)?;
-//     Ok(())
-// }
